@@ -166,10 +166,17 @@ with tab1:
                     if mat.empty:
                         st.info("Sem carteira de ações para este fundo.")
                     else:
+                        # total aplicado pelo fundo em cada mês (valor por extenso)
+                        totais_f = mat.sum(axis=0)
+                        st.markdown("**Total aplicado em ações por mês**")
+                        ct = st.columns(len(totais_f))
+                        for i, col in enumerate(ct):
+                            col.metric(totais_f.index[i], fmt_valor(totais_f.iloc[i]))
+
                         mat_mi = mat / 1e6
                         st.dataframe(
-                            mat_mi.style.format("{:,.0f}")
-                                  .background_gradient(cmap="YlOrRd", axis=None),
+                            mat_mi.style.format(lambda v: pontua(v) if v else "-")
+                                  .background_gradient(cmap="YlGn", axis=None),
                             use_container_width=True)
 
 # ===================== ABA 2: RANKING =====================
@@ -302,7 +309,7 @@ with tab3:
             col.metric(mes, fmt_celula(atual), delta)
 
         st.dataframe(
-            m.style.format(fmt_celula).background_gradient(cmap="YlOrRd", axis=None),
+            m.style.format(fmt_celula).background_gradient(cmap="YlGn", axis=None),
             use_container_width=True,
         )
         st.download_button("⬇️ Baixar matriz (CSV)",
