@@ -46,8 +46,9 @@ def fmt_mult(v):
     return "-" if v is None or pd.isna(v) else f"{v:.1f}x"
 
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["📋 Ficha da ação", "⚖️ Comparar", "🔎 Triagem", "💰 Dividendos"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["📋 Ficha da ação", "⚖️ Comparar", "🔎 Triagem", "💰 Dividendos",
+     "🧺 Simulador de carteira"])
 
 # ===================== ABA 1: FICHA =====================
 with tab1:
@@ -166,8 +167,9 @@ with tab2:
                 "Margem líq.": fmt_pct, "ROE": fmt_pct,
                 "P/L": fmt_mult, "P/VP": fmt_mult,
             }
-            # cor condicional SÓ nestas 3, em tons suaves; (col, maior_é_melhor)
-            COLORIR = [("Margem líq.", True), ("ROE", True), ("P/L", False)]
+            # cor condicional nestas colunas, em tons suaves; (col, maior_é_melhor)
+            COLORIR = [("Margem líq.", True), ("ROE", True),
+                       ("P/L", False), ("P/VP", False)]
 
             def escala_suave(serie, maior_melhor):
                 """Verde-claro (melhor) -> vermelho-claro (pior), tons pastel."""
@@ -194,13 +196,19 @@ with tab2:
                    .format(FORMATOS)
                    .set_properties(**{"text-align": "center", "font-size": "13px"})
                    .set_table_styles([
-                       {"selector": "th",
-                        "props": [("background-color", "#1F4E79"),
-                                  ("color", "white"), ("font-weight", "bold"),
-                                  ("text-align", "center")]},
+                       # cabeçalho das colunas — tema escuro
+                       {"selector": "th.col_heading",
+                        "props": [("background-color", "#0E2841"),
+                                  ("color", "#FFFFFF"), ("font-weight", "bold"),
+                                  ("text-align", "center"), ("padding", "8px")]},
+                       # canto superior esquerdo (rótulo do índice)
+                       {"selector": "th.blank",
+                        "props": [("background-color", "#0E2841")]},
+                       # coluna dos tickers (lateral) — tema escuro
                        {"selector": "th.row_heading",
-                        "props": [("background-color", "#1F4E79"),
-                                  ("color", "white")]},
+                        "props": [("background-color", "#0E2841"),
+                                  ("color", "#FFFFFF"), ("font-weight", "bold"),
+                                  ("text-align", "center"), ("padding", "8px")]},
                    ]))
             if len(df) >= 2:
                 for col, maior in COLORIR:
@@ -302,3 +310,103 @@ with tab4:
         st.dataframe(div, use_container_width=True,
                      column_config={"Dividendo por ação (R$)":
                                     st.column_config.NumberColumn(format="R$ %.4f")})
+
+# ===================== ABA 5: SIMULADOR DE CARTEIRA =====================
+with tab5:
+    st.markdown("Monte uma carteira: escolha as ações, defina o **% de cada uma** "
+                "e veja os indicadores ponderados da carteira.")
+    anoc = st.selectbox("Ano de referência", acoes.ANOS,
+                        index=len(acoes.ANOS) - 1, key="ano_cart")
+    sel = st.multiselect("Ações da carteira", lista,
+                         default=[t for t in ["PETR4", "VALE3", "ITUB4"] if t in lista],
+                         key="cart_sel")
+
+    if not sel:
+        st.info("Selecione ao menos uma ação.")
+    else:
+        # campos de % por ação
+        st.markdown("**Pesos (%)**")
+        cols = st.columns(min(len(sel), 5))
+        pesos = {}
+        peso_default = round(100.0 / len(sel), 1)
+        for i, tk in enumerate(sel):
+            with cols[i % len(cols)]:
+                pesos[tk] = st.number_input(tk, min_value=0.0, max_value=100.0,
+                                            value=peso_default, step=1.0, key=f"peso_{tk}")
+        soma = sum(pesos.values())
+        if abs(soma - 100.0) > 0.05:
+            st.warning(f"⚠️ Os pesos somam **{soma:.1f}%** (não 100%). "
+                       "As médias usam os pesos como estão — o resultado pode ficar distorcido.")
+        else:
+            st.success(f"Pesos somam {soma:.1f}%. ✓")
+
+        # monta tabela de indicadores por ação
+        linhas = []
+        for tk in sel:
+            ind = acoes.indicadores_ano(tk, anoc)
+            if not ind:
+                continue
+            linhas.append({
+                "Ticker": tk, "Peso %": pesos[tk],
+                "Margem líq.": ind["Margem líquida"], "ROE": ind["ROE"],
+                "P/L": ind["P/L"], "P/VP": ind["P/VP"],
+            })
+        if not linhas:
+            st.warning("Sem indicadores para as ações escolhidas neste ano.")
+        else:
+            df = pd.DataFrame(linhas).set_index("Ticker")
+            w = df["Peso %"] / 100.0  # frações
+
+            def media_simples(col):
+                """Média ponderada simples (boa p/ margem, ROE)."""
+                s = pd.to_numeric(df[col], errors="coerce")
+                mask = s.notna()
+                if mask.sum() == 0 or w[mask].sum() == 0:
+                    return None
+                return (s[mask] * w[mask]).sum() / w[mask].sum()
+
+            def media_inverso(col):
+                """Para P/L e P/VP: pondera o INVERSO (forma correta de agregar múltiplos)."""
+                s = pd.to_numeric(df[col], errors="coerce")
+                mask = s.notna() & (s > 0)
+                if mask.sum() == 0 or w[mask].sum() == 0:
+                    return None
+                inv = (w[mask] / w[mask].sum() * (1.0 / s[mask])).sum()
+                return 1.0 / inv if inv else None
+
+            carteira = {
+                "Margem líq.": media_simples("Margem líq."),
+                "ROE": media_simples("ROE"),
+                "P/L": media_inverso("P/L"),
+                "P/VP": media_inverso("P/VP"),
+            }
+
+            # tabela das ações (com pesos)
+            st.markdown("**Composição da carteira**")
+            sty = (df.style.format({
+                        "Peso %": "{:.1f}%", "Margem líq.": fmt_pct,
+                        "ROE": fmt_pct, "P/L": fmt_mult, "P/VP": fmt_mult})
+                   .set_table_styles([
+                       {"selector": "th.col_heading",
+                        "props": [("background-color", "#0E2841"), ("color", "white"),
+                                  ("font-weight", "bold"), ("text-align", "center")]},
+                       {"selector": "th.row_heading",
+                        "props": [("background-color", "#0E2841"), ("color", "white"),
+                                  ("font-weight", "bold")]},
+                       {"selector": "th.blank",
+                        "props": [("background-color", "#0E2841")]},
+                   ])
+                   .set_properties(**{"text-align": "center"}))
+            st.dataframe(sty, use_container_width=True)
+
+            # cartões com o resultado da carteira
+            st.markdown("### 🧺 Indicadores da carteira (ponderados)")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Margem líq. média", fmt_pct(carteira["Margem líq."]))
+            c2.metric("ROE médio", fmt_pct(carteira["ROE"]))
+            c3.metric("P/L da carteira", fmt_mult(carteira["P/L"]))
+            c4.metric("P/VP da carteira", fmt_mult(carteira["P/VP"]))
+
+            st.caption("ℹ️ Margem e ROE = média ponderada pelos pesos. "
+                       "P/L e P/VP = ponderados pelo inverso (forma correta de "
+                       "agregar múltiplos numa carteira).")
