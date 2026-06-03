@@ -90,17 +90,19 @@ with tab1:
         if serie.empty:
             st.warning(f"Nenhum fundo com {acao_sel} em nenhum período.")
         else:
-            visivel = serie.drop(columns=["_periodo"])
-            sty = (visivel.style.format({
-                        "Fundos com posição": pontua,
-                        "Valor aplicado (R$)": fmt_valor})
-                   .set_table_styles(ESTILO_HDR)
-                   .background_gradient(cmap="Blues", subset=["Valor aplicado (R$)"])
-                   .set_properties(**{"text-align": "center"}))
+            # tudo em R$ milhões (numérico) para ordenar/filtrar corretamente
+            visivel = serie.drop(columns=["_periodo"]).copy()
+            visivel["Valor aplicado (R$ mi)"] = visivel["Valor aplicado (R$)"] / 1e6
+            visivel = visivel.drop(columns=["Valor aplicado (R$)"])
             # tabela clicável (seleção de linha)
             evento = st.dataframe(
-                sty, use_container_width=True,
-                on_select="rerun", selection_mode="single-row", key="sel_mes")
+                visivel, use_container_width=True,
+                on_select="rerun", selection_mode="single-row", key="sel_mes",
+                column_config={
+                    "Fundos com posição": st.column_config.NumberColumn(format="%d"),
+                    "Valor aplicado (R$ mi)": st.column_config.NumberColumn(
+                        format="%.0f", help="Valor de mercado total aplicado, em R$ milhões"),
+                })
 
             # descobre qual mês foi clicado (senão, usa o último)
             linhas_sel = evento.selection.rows if evento and evento.selection else []
@@ -126,15 +128,24 @@ with tab1:
                 m2.metric("Valor agregado", fmt_valor(total))
                 m3.metric("Quantidade total", f"{pontua(qtd)} ações")
 
+                # valores em R$ milhões (numérico) para ordenar pela coluna
                 mostrar = pd.DataFrame({
                     "CNPJ": df["CNPJ"], "Fundo": df["Fundo"], "Tipo": df["Tipo"],
-                    "Quantidade": df["Quantidade"].map(pontua),
-                    "Valor mercado": df["Valor mercado (R$)"].map(fmt_valor),
-                    "PL do fundo": df["PL do fundo (R$)"].map(fmt_valor),
-                    "% do PL": df["% do PL"].map(
-                        lambda v: "-" if pd.isna(v) else f"{v*100:.2f}%"),
+                    "Quantidade": df["Quantidade"],
+                    "Valor mercado (R$ mi)": df["Valor mercado (R$)"] / 1e6,
+                    "PL do fundo (R$ mi)": df["PL do fundo (R$)"] / 1e6,
+                    "% do PL": df["% do PL"] * 100,
                 })
-                st.dataframe(mostrar, use_container_width=True, hide_index=True)
+                st.dataframe(
+                    mostrar, use_container_width=True, hide_index=True,
+                    column_config={
+                        "Quantidade": st.column_config.NumberColumn(format="%.0f"),
+                        "Valor mercado (R$ mi)": st.column_config.NumberColumn(
+                            format="%.1f", help="Valor de mercado, em R$ milhões"),
+                        "PL do fundo (R$ mi)": st.column_config.NumberColumn(
+                            format="%.1f", help="Patrimônio líquido do fundo, em R$ milhões"),
+                        "% do PL": st.column_config.NumberColumn(format="%.2f%%"),
+                    })
                 st.download_button(
                     "⬇️ Baixar CSV", df.to_csv(index=False).encode("utf-8-sig"),
                     f"fundos_{acao_sel}_{periodo_alvo}.csv", "text/csv")
