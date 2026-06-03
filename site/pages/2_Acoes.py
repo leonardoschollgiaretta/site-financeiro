@@ -16,7 +16,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from lib import acoes
+from lib import acoes, carteiras
 
 st.set_page_config(page_title="Ações — Fundamentos", page_icon="📈", layout="wide")
 st.title("📈 Ações — Fundamentos")
@@ -314,7 +314,29 @@ with tab4:
 # ===================== ABA 5: SIMULADOR DE CARTEIRA =====================
 with tab5:
     st.markdown("Monte uma carteira: escolha as ações, defina o **% de cada uma** "
-                "e veja os indicadores ponderados da carteira.")
+                "e veja os indicadores ponderados. Você pode **salvar** a carteira.")
+
+    # --- carregar carteira salva ---
+    salvas = carteiras.listar()
+    cc1, cc2 = st.columns([3, 1])
+    with cc1:
+        escolha = st.selectbox("Carregar carteira salva",
+                               ["(nova)"] + salvas, key="cart_load")
+    with cc2:
+        if escolha != "(nova)" and st.button("🗑️ Excluir", key="cart_del"):
+            carteiras.excluir(escolha)
+            st.rerun()
+
+    # se escolheu uma salva e ainda não aplicou, popula o estado
+    if escolha != "(nova)" and st.session_state.get("_cart_atual") != escolha:
+        salva = carteiras.carregar(escolha)
+        if salva:
+            st.session_state["cart_sel"] = list(salva.keys())
+            for tk, p in salva.items():
+                st.session_state[f"peso_{tk}"] = float(p)
+            st.session_state["_cart_atual"] = escolha
+            st.rerun()
+
     anoc = st.selectbox("Ano de referência", acoes.ANOS,
                         index=len(acoes.ANOS) - 1, key="ano_cart")
     sel = st.multiselect("Ações da carteira", lista,
@@ -324,7 +346,6 @@ with tab5:
     if not sel:
         st.info("Selecione ao menos uma ação.")
     else:
-        # campos de % por ação
         st.markdown("**Pesos (%)**")
         cols = st.columns(min(len(sel), 5))
         pesos = {}
@@ -332,13 +353,31 @@ with tab5:
         for i, tk in enumerate(sel):
             with cols[i % len(cols)]:
                 pesos[tk] = st.number_input(tk, min_value=0.0, max_value=100.0,
-                                            value=peso_default, step=1.0, key=f"peso_{tk}")
+                                            value=st.session_state.get(f"peso_{tk}", peso_default),
+                                            step=1.0, key=f"peso_{tk}")
         soma = sum(pesos.values())
         if abs(soma - 100.0) > 0.05:
             st.warning(f"⚠️ Os pesos somam **{soma:.1f}%** (não 100%). "
                        "As médias usam os pesos como estão — o resultado pode ficar distorcido.")
         else:
             st.success(f"Pesos somam {soma:.1f}%. ✓")
+
+        # --- salvar a carteira atual ---
+        sv1, sv2 = st.columns([3, 1])
+        with sv1:
+            nome_save = st.text_input("Nome para salvar esta carteira",
+                                      value=escolha if escolha != "(nova)" else "",
+                                      placeholder="ex.: Minha carteira dividendos")
+        with sv2:
+            st.write("")
+            st.write("")
+            if st.button("💾 Salvar", key="cart_save"):
+                try:
+                    carteiras.salvar(nome_save, pesos)
+                    st.session_state["_cart_atual"] = nome_save
+                    st.success(f"Carteira '{nome_save}' salva!")
+                except ValueError as e:
+                    st.error(str(e))
 
         # monta tabela de indicadores por ação
         linhas = []
@@ -348,6 +387,7 @@ with tab5:
                 continue
             linhas.append({
                 "Ticker": tk, "Peso %": pesos[tk],
+                "Receita líq.": ind["Receita líquida"], "Lucro líq.": ind["Lucro líquido"],
                 "Margem líq.": ind["Margem líquida"], "ROE": ind["ROE"],
                 "P/L": ind["P/L"], "P/VP": ind["P/VP"],
             })
@@ -358,7 +398,7 @@ with tab5:
             w = df["Peso %"] / 100.0  # frações
 
             def media_simples(col):
-                """Média ponderada simples (boa p/ margem, ROE)."""
+                """Média ponderada simples (margem, ROE, receita, lucro)."""
                 s = pd.to_numeric(df[col], errors="coerce")
                 mask = s.notna()
                 if mask.sum() == 0 or w[mask].sum() == 0:
@@ -375,6 +415,8 @@ with tab5:
                 return 1.0 / inv if inv else None
 
             carteira = {
+                "Receita líq.": media_simples("Receita líq."),
+                "Lucro líq.": media_simples("Lucro líq."),
                 "Margem líq.": media_simples("Margem líq."),
                 "ROE": media_simples("ROE"),
                 "P/L": media_inverso("P/L"),
@@ -384,8 +426,10 @@ with tab5:
             # tabela das ações (com pesos)
             st.markdown("**Composição da carteira**")
             sty = (df.style.format({
-                        "Peso %": "{:.1f}%", "Margem líq.": fmt_pct,
-                        "ROE": fmt_pct, "P/L": fmt_mult, "P/VP": fmt_mult})
+                        "Peso %": "{:.1f}%",
+                        "Receita líq.": fmt_valor, "Lucro líq.": fmt_valor,
+                        "Margem líq.": fmt_pct, "ROE": fmt_pct,
+                        "P/L": fmt_mult, "P/VP": fmt_mult})
                    .set_table_styles([
                        {"selector": "th.col_heading",
                         "props": [("background-color", "#0E2841"), ("color", "white"),
@@ -401,12 +445,15 @@ with tab5:
 
             # cartões com o resultado da carteira
             st.markdown("### 🧺 Indicadores da carteira (ponderados)")
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Margem líq. média", fmt_pct(carteira["Margem líq."]))
-            c2.metric("ROE médio", fmt_pct(carteira["ROE"]))
-            c3.metric("P/L da carteira", fmt_mult(carteira["P/L"]))
-            c4.metric("P/VP da carteira", fmt_mult(carteira["P/VP"]))
+            r1c1, r1c2, r1c3 = st.columns(3)
+            r1c1.metric("Receita líq. média", fmt_valor(carteira["Receita líq."]))
+            r1c2.metric("Lucro líq. médio", fmt_valor(carteira["Lucro líq."]))
+            r1c3.metric("Margem líq. média", fmt_pct(carteira["Margem líq."]))
+            r2c1, r2c2, r2c3 = st.columns(3)
+            r2c1.metric("ROE médio", fmt_pct(carteira["ROE"]))
+            r2c2.metric("P/L da carteira", fmt_mult(carteira["P/L"]))
+            r2c3.metric("P/VP da carteira", fmt_mult(carteira["P/VP"]))
 
-            st.caption("ℹ️ Margem e ROE = média ponderada pelos pesos. "
+            st.caption("ℹ️ Receita, lucro, margem e ROE = média ponderada pelos pesos. "
                        "P/L e P/VP = ponderados pelo inverso (forma correta de "
                        "agregar múltiplos numa carteira).")

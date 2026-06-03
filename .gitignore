@@ -39,6 +39,7 @@ env/
 
 # --- Streamlit (cópias de dados do site) ---
 site/data/
+site/carteiras_salvas/
 
 # --- Sistema / editor ---
 .DS_Store
