@@ -89,8 +89,9 @@ with tab1:
         if fin and fin["preco"]:
             from datetime import datetime
             mc1, mc2, mc3 = st.columns(3)
+            preco_fmt = f"R$ {fin['preco']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             mc1.metric(f"Último preço ({fin.get('ticker_preco') or acao_sel})",
-                       fmt_valor(fin["preco"]))
+                       preco_fmt)
             mc2.metric("Ações totais (ON+PN)",
                        pontua(fin["acoes_total"]) if fin["acoes_total"] else "-")
             mc3.metric("Market cap", fmt_valor(fin["market_cap"]))
