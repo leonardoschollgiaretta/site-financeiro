@@ -1,0 +1,24 @@
+# Ambiente
+venv/
+.env
+__pycache__/
+*.pyc
+
+# Dados grandes (mantém estrutura, ignora conteúdo)
+data/raw/*
+data/processed/*
+data/cache/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/cache/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

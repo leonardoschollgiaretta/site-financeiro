@@ -1,0 +1,66 @@
+# ============================================================
+# .gitignore — versiona SÓ código. Dados/saídas ficam de fora.
+# (Os dados são grandes e mudam toda hora; não fazem parte do código.)
+# ============================================================
+
+# --- Bancos de dados e backups ---
+*.db
+*.db.bak_*
+*.sqlite
+*.sqlite3
+
+# --- Dados brutos baixados / processados ---
+*.csv
+*.json
+*.xml
+*.zip
+cvm_cda/
+**/cvm_cda/
+
+# --- Saídas geradas (relatórios, planilhas, PDFs, imagens) ---
+*.xlsx
+*.xls
+*.pdf
+*.png
+*.jpg
+*.jpeg
+outputs/
+**/outputs/
+muffato_dem/
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# --- Streamlit (cópias de dados do site) ---
+site/data/
+
+# --- Sistema / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+*.tmp
+
+# --- HTML de debug solto ---
+muffato_debug.html
+*.html
+
+# --- Caches grandes (SEC, etc.) ---
+**/cache_sec/
+**/_cache_*
+gestoras_sec/cache_sec/
+*.txt
+!requirements.txt
+!**/requirements.txt
+
+# --- Notebooks e locks de ambiente (dados/efêmeros) ---
+*.ipynb
+*.lock
+
+# --- Pasta com repositorio Git proprio (mantida separada) ---
+teste-github/
