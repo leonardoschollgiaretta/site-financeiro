@@ -5,12 +5,27 @@ Reaproveita a lógica dos scripts existentes (consulta_fundos.py,
 relatorio_matriz_ticker_mes.py), mas retornando DataFrames do pandas,
 que o Streamlit exibe como tabela interativa.
 """
+import re
+import unicodedata
+
 import pandas as pd
 
 from lib.db import conn_fundos
 
 MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun',
          'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+
+def _normalizar(texto):
+    """Tira acentos e pontuação, deixa minúsculo. 'GERAÇÃO L. PAR' -> 'geracao l par'."""
+    if not texto:
+        return ""
+    # remove acentos
+    nfkd = unicodedata.normalize("NFKD", str(texto))
+    sem_acento = "".join(c for c in nfkd if not unicodedata.combining(c))
+    # troca tudo que não é letra/número por espaço, colapsa espaços
+    limpo = re.sub(r"[^a-zA-Z0-9]+", " ", sem_acento).lower().strip()
+    return re.sub(r"\s+", " ", limpo)
 
 
 def periodo_humano(p):
@@ -156,12 +171,7 @@ def buscar_fundos(termo="", limite=300, apenas_com_acoes=False):
 
     Retorna DataFrame com colunas: cnpj, denominacao, rotulo (nome · cnpj).
     """
-    termo = (termo or "").strip().upper()
     where = "WHERE f.denominacao IS NOT NULL AND f.denominacao <> ''"
-    params = []
-    if termo:
-        where += " AND UPPER(f.denominacao) LIKE ?"
-        params.append(f"%{termo}%")
     if apenas_com_acoes:
         # só fundos com pelo menos 1 posição em ações em algum período
         where += (" AND f.cnpj IN (SELECT DISTINCT cnpj_fundo FROM posicoes_acoes "
@@ -172,11 +182,20 @@ def buscar_fundos(termo="", limite=300, apenas_com_acoes=False):
         {where}
         GROUP BY f.cnpj
         ORDER BY f.denominacao
-        LIMIT ?
     """
-    params.append(limite)
     with conn_fundos() as c:
-        df = pd.read_sql_query(sql, c, params=params)
+        df = pd.read_sql_query(sql, c)
+    if df.empty:
+        return df
+
+    # filtro em Python: ignora acentos/pontuação; cada palavra digitada deve estar no nome
+    termos = _normalizar(termo).split()
+    if termos:
+        norm = df["denominacao"].map(_normalizar)
+        mask = norm.apply(lambda nome: all(t in nome for t in termos))
+        df = df[mask]
+
+    df = df.head(limite)
     if not df.empty:
         # nome primeiro (o que o usuário lê), CNPJ no fim para diferenciar homônimos
         df["rotulo"] = df["denominacao"].str.slice(0, 75) + "  ·  " + df["cnpj"]
