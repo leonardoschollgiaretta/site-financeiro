@@ -56,6 +56,39 @@ def tickers_disponiveis():
     return df["cd_ativo"].tolist()
 
 
+def resumo_cobertura_por_mes():
+    """Panorama por período: total de fundos no banco, quantos têm posição em
+    ações e quantos não têm. Útil para lembrar que meses recentes declaram menos.
+
+    DataFrame: período (humano) nas linhas; colunas com as contagens e o total
+    de posições em ações.
+    """
+    with conn_fundos() as c:
+        # total de fundos cadastrados por período
+        tot = pd.read_sql_query(
+            "SELECT periodo, COUNT(DISTINCT cnpj) AS total_fundos "
+            "FROM fundos GROUP BY periodo", c)
+        # fundos com posição em ações + nº de posições, por período
+        comp = pd.read_sql_query(
+            "SELECT periodo, COUNT(DISTINCT cnpj_fundo) AS com_posicao, "
+            "COUNT(*) AS total_posicoes "
+            "FROM posicoes_acoes WHERE cd_ativo IS NOT NULL AND cd_ativo <> '' "
+            "GROUP BY periodo", c)
+
+    df = tot.merge(comp, on="periodo", how="outer").fillna(0)
+    df = df.sort_values("periodo")
+    df["com_posicao"] = df["com_posicao"].astype(int)
+    df["total_fundos"] = df["total_fundos"].astype(int)
+    df["total_posicoes"] = df["total_posicoes"].astype(int)
+    df["sem_posicao"] = (df["total_fundos"] - df["com_posicao"]).clip(lower=0)
+    df["Período"] = df["periodo"].map(periodo_humano)
+    df = df.set_index("Período")[
+        ["total_fundos", "com_posicao", "sem_posicao", "total_posicoes"]]
+    df.columns = ["Total de fundos", "Com posição em ações",
+                  "Sem posição em ações", "Total de posições"]
+    return df
+
+
 def fundos_com_ticker(ticker, periodo=None):
     """Fundos que detêm um ticker num período, ordenados por valor de mercado."""
     periodo = periodo or ultimo_periodo()

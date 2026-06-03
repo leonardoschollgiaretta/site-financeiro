@@ -44,6 +44,30 @@ tab1, tab2, tab3 = st.tabs(["🔎 Por ação", "🏆 Ranking", "📈 Evolução 
 
 # ===================== ABA 1: POR AÇÃO =====================
 with tab1:
+    # --- RESUMO: cobertura de declarações por mês (panorama no topo) ---
+    st.subheader("Panorama — declarações de carteira por mês")
+    st.caption("Quantos fundos declararam posição em ações a cada mês. "
+               "Meses recentes costumam ter menos declarações (defasagem da CVM).")
+    cob = fundos.resumo_cobertura_por_mes()
+    sty_cob = (cob.style
+               .format("{:,.0f}")
+               .set_table_styles([
+                   {"selector": "th.col_heading",
+                    "props": [("background-color", "#0E2841"), ("color", "white"),
+                              ("font-weight", "bold"), ("text-align", "center")]},
+                   {"selector": "th.row_heading",
+                    "props": [("background-color", "#0E2841"), ("color", "white"),
+                              ("font-weight", "bold")]},
+                   {"selector": "th.blank",
+                    "props": [("background-color", "#0E2841")]},
+               ])
+               .background_gradient(cmap="Blues", subset=["Com posição em ações"])
+               .set_properties(**{"text-align": "center"}))
+    st.dataframe(sty_cob, use_container_width=True)
+
+    st.divider()
+
+    # --- DETALHE: fundos que detêm uma ação ---
     st.subheader("Fundos que detêm uma ação")
     c1, c2 = st.columns([2, 1])
     with c1:
@@ -63,20 +87,22 @@ with tab1:
         m1, m2, m3 = st.columns(3)
         m1.metric("Fundos detentores", f"{len(df)}")
         m2.metric("Valor agregado", fmt_valor(total))
-        m3.metric("Quantidade total", f"{qtd:,.0f} ações")
+        m3.metric("Quantidade total", f"{qtd:,.0f} ações".replace(",", "."))
 
-        mostrar = df.copy()
-        mostrar["% do PL"] = (mostrar["% do PL"] * 100).round(2)
-        st.dataframe(
-            mostrar, use_container_width=True, hide_index=True,
-            column_config={
-                "Valor mercado (R$)": st.column_config.NumberColumn(format="R$ %,.0f"),
-                "PL do fundo (R$)": st.column_config.NumberColumn(format="R$ %,.0f"),
-                "Quantidade": st.column_config.NumberColumn(format="%,.0f"),
-                "% do PL": st.column_config.NumberColumn(format="%.2f%%"),
-            },
-        )
-        st.download_button("⬇️ Baixar CSV", mostrar.to_csv(index=False).encode("utf-8"),
+        # tabela formatada (valores em bi/mi, quantidade com pontuação)
+        mostrar = pd.DataFrame({
+            "CNPJ": df["CNPJ"],
+            "Fundo": df["Fundo"],
+            "Tipo": df["Tipo"],
+            "Quantidade": df["Quantidade"].map(
+                lambda v: "-" if pd.isna(v) else f"{v:,.0f}".replace(",", ".")),
+            "Valor mercado": df["Valor mercado (R$)"].map(fmt_valor),
+            "PL do fundo": df["PL do fundo (R$)"].map(fmt_valor),
+            "% do PL": df["% do PL"].map(
+                lambda v: "-" if pd.isna(v) else f"{v*100:.2f}%"),
+        })
+        st.dataframe(mostrar, use_container_width=True, hide_index=True)
+        st.download_button("⬇️ Baixar CSV", df.to_csv(index=False).encode("utf-8-sig"),
                            f"fundos_{ticker}_{periodo}.csv", "text/csv")
 
 # ===================== ABA 2: RANKING =====================
