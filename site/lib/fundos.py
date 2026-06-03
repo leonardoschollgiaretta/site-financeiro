@@ -89,6 +89,30 @@ def resumo_cobertura_por_mes():
     return df
 
 
+def resumo_acao_por_mes(ticker):
+    """Para uma ação específica: por período, nº de fundos detentores e valor
+    total aplicado nessa ação. DataFrame com período (humano) nas linhas.
+    """
+    sql = """
+        SELECT periodo,
+               COUNT(DISTINCT cnpj_fundo) AS fundos,
+               SUM(vl_mercado)            AS valor
+        FROM posicoes_acoes
+        WHERE cd_ativo = ?
+        GROUP BY periodo ORDER BY periodo
+    """
+    with conn_fundos() as c:
+        df = pd.read_sql_query(sql, c, params=[ticker.upper()])
+    if df.empty:
+        return df
+    df["Período"] = df["periodo"].map(periodo_humano)
+    df["_periodo"] = df["periodo"]  # guarda o código p/ uso posterior
+    df = df.set_index("Período")
+    df = df.rename(columns={"fundos": "Fundos com posição",
+                            "valor": "Valor aplicado (R$)"})
+    return df[["Fundos com posição", "Valor aplicado (R$)", "_periodo"]]
+
+
 def fundos_com_ticker(ticker, periodo=None):
     """Fundos que detêm um ticker num período, ordenados por valor de mercado."""
     periodo = periodo or ultimo_periodo()

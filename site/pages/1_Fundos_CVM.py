@@ -42,73 +42,102 @@ def fmt_valor(v):
 
 tab1, tab2, tab3 = st.tabs(["🔎 Por ação", "🏆 Ranking", "📈 Evolução mês a mês"])
 
+# estilo de cabeçalho escuro reutilizável
+ESTILO_HDR = [
+    {"selector": "th.col_heading",
+     "props": [("background-color", "#0E2841"), ("color", "white"),
+               ("font-weight", "bold"), ("text-align", "center")]},
+    {"selector": "th.row_heading",
+     "props": [("background-color", "#0E2841"), ("color", "white"),
+               ("font-weight", "bold")]},
+    {"selector": "th.blank", "props": [("background-color", "#0E2841")]},
+]
+
+
+def pontua(v):
+    return "-" if pd.isna(v) else f"{v:,.0f}".replace(",", ".")
+
+
 # ===================== ABA 1: POR AÇÃO =====================
 with tab1:
-    # --- RESUMO: cobertura de declarações por mês (panorama no topo) ---
-    st.subheader("Panorama — declarações de carteira por mês")
-    st.caption("Quantos fundos declararam posição em ações a cada mês. "
-               "Meses recentes costumam ter menos declarações (defasagem da CVM).")
-    cob = fundos.resumo_cobertura_por_mes()
-    sty_cob = (cob.style
-               .format({
-                   "Total de fundos": lambda v: f"{v:,.0f}".replace(",", "."),
-                   "Com posição em ações": lambda v: f"{v:,.0f}".replace(",", "."),
-                   "Sem posição em ações": lambda v: f"{v:,.0f}".replace(",", "."),
-                   "Valor aplicado (R$)": fmt_valor,
-               })
-               .set_table_styles([
-                   {"selector": "th.col_heading",
-                    "props": [("background-color", "#0E2841"), ("color", "white"),
-                              ("font-weight", "bold"), ("text-align", "center")]},
-                   {"selector": "th.row_heading",
-                    "props": [("background-color", "#0E2841"), ("color", "white"),
-                              ("font-weight", "bold")]},
-                   {"selector": "th.blank",
-                    "props": [("background-color", "#0E2841")]},
-               ])
+    # --- FILTRO no topo, vale para as duas tabelas ---
+    tickers = fundos.tickers_disponiveis()
+    ticker = st.selectbox(
+        "Filtrar por ação (vazio = todas)", ["(todas)"] + tickers, index=0,
+        key="filtro_acao")
+    acao_sel = None if ticker == "(todas)" else ticker
+
+    # --- TABELA 1: panorama mensal (geral OU da ação escolhida) ---
+    if acao_sel is None:
+        st.subheader("Panorama — declarações de carteira por mês (todas as ações)")
+        st.caption("Quantos fundos declararam posição em ações a cada mês. "
+                   "Meses recentes costumam ter menos declarações (defasagem da CVM). "
+                   "Escolha uma ação acima para ver a série dela.")
+        cob = fundos.resumo_cobertura_por_mes()
+        sty = (cob.style.format({
+                    "Total de fundos": pontua, "Com posição em ações": pontua,
+                    "Sem posição em ações": pontua, "Valor aplicado (R$)": fmt_valor})
+               .set_table_styles(ESTILO_HDR)
                .background_gradient(cmap="Blues", subset=["Com posição em ações"])
                .set_properties(**{"text-align": "center"}))
-    st.dataframe(sty_cob, use_container_width=True)
-
-    st.divider()
-
-    # --- DETALHE: fundos que detêm uma ação ---
-    st.subheader("Fundos que detêm uma ação")
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        tickers = fundos.tickers_disponiveis()
-        ticker = st.selectbox("Ticker", tickers,
-                              index=tickers.index("PETR4") if "PETR4" in tickers else 0)
-    with c2:
-        periodo = st.selectbox("Período", periodos, index=len(periodos) - 1,
-                               format_func=lambda p: labels[p], key="per_acao")
-
-    df = fundos.fundos_com_ticker(ticker, periodo)
-    if df.empty:
-        st.warning(f"Nenhum fundo com {ticker} em {labels[periodo]}.")
+        st.dataframe(sty, use_container_width=True)
+        st.info("💡 Selecione uma ação no filtro acima para destravar a série "
+                "mensal dela e poder clicar num mês.")
     else:
-        total = df["Valor mercado (R$)"].sum()
-        qtd = df["Quantidade"].sum()
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Fundos detentores", f"{len(df)}")
-        m2.metric("Valor agregado", fmt_valor(total))
-        m3.metric("Quantidade total", f"{qtd:,.0f} ações".replace(",", "."))
+        st.subheader(f"{acao_sel} — fundos e valor aplicado por mês")
+        st.caption("Clique em um mês na tabela para ver os fundos detentores embaixo.")
+        serie = fundos.resumo_acao_por_mes(acao_sel)
+        if serie.empty:
+            st.warning(f"Nenhum fundo com {acao_sel} em nenhum período.")
+        else:
+            visivel = serie.drop(columns=["_periodo"])
+            sty = (visivel.style.format({
+                        "Fundos com posição": pontua,
+                        "Valor aplicado (R$)": fmt_valor})
+                   .set_table_styles(ESTILO_HDR)
+                   .background_gradient(cmap="Blues", subset=["Valor aplicado (R$)"])
+                   .set_properties(**{"text-align": "center"}))
+            # tabela clicável (seleção de linha)
+            evento = st.dataframe(
+                sty, use_container_width=True,
+                on_select="rerun", selection_mode="single-row", key="sel_mes")
 
-        # tabela formatada (valores em bi/mi, quantidade com pontuação)
-        mostrar = pd.DataFrame({
-            "CNPJ": df["CNPJ"],
-            "Fundo": df["Fundo"],
-            "Tipo": df["Tipo"],
-            "Quantidade": df["Quantidade"].map(
-                lambda v: "-" if pd.isna(v) else f"{v:,.0f}".replace(",", ".")),
-            "Valor mercado": df["Valor mercado (R$)"].map(fmt_valor),
-            "PL do fundo": df["PL do fundo (R$)"].map(fmt_valor),
-            "% do PL": df["% do PL"].map(
-                lambda v: "-" if pd.isna(v) else f"{v*100:.2f}%"),
-        })
-        st.dataframe(mostrar, use_container_width=True, hide_index=True)
-        st.download_button("⬇️ Baixar CSV", df.to_csv(index=False).encode("utf-8-sig"),
-                           f"fundos_{ticker}_{periodo}.csv", "text/csv")
+            # descobre qual mês foi clicado (senão, usa o último)
+            linhas_sel = evento.selection.rows if evento and evento.selection else []
+            if linhas_sel:
+                periodo_alvo = serie.iloc[linhas_sel[0]]["_periodo"]
+            else:
+                periodo_alvo = serie.iloc[-1]["_periodo"]
+
+            # --- TABELA 2: fundos detentores da ação no mês selecionado ---
+            st.divider()
+            st.subheader(f"Fundos com posição em {acao_sel} — {labels.get(periodo_alvo, periodo_alvo)}")
+            if not linhas_sel:
+                st.caption("(mostrando o último mês; clique numa linha acima para trocar)")
+
+            df = fundos.fundos_com_ticker(acao_sel, periodo_alvo)
+            if df.empty:
+                st.warning("Nenhum fundo neste mês.")
+            else:
+                total = df["Valor mercado (R$)"].sum()
+                qtd = df["Quantidade"].sum()
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Fundos detentores", f"{len(df)}")
+                m2.metric("Valor agregado", fmt_valor(total))
+                m3.metric("Quantidade total", f"{pontua(qtd)} ações")
+
+                mostrar = pd.DataFrame({
+                    "CNPJ": df["CNPJ"], "Fundo": df["Fundo"], "Tipo": df["Tipo"],
+                    "Quantidade": df["Quantidade"].map(pontua),
+                    "Valor mercado": df["Valor mercado (R$)"].map(fmt_valor),
+                    "PL do fundo": df["PL do fundo (R$)"].map(fmt_valor),
+                    "% do PL": df["% do PL"].map(
+                        lambda v: "-" if pd.isna(v) else f"{v*100:.2f}%"),
+                })
+                st.dataframe(mostrar, use_container_width=True, hide_index=True)
+                st.download_button(
+                    "⬇️ Baixar CSV", df.to_csv(index=False).encode("utf-8-sig"),
+                    f"fundos_{acao_sel}_{periodo_alvo}.csv", "text/csv")
 
 # ===================== ABA 2: RANKING =====================
 with tab2:
