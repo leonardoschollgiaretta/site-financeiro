@@ -1,0 +1,4 @@
+# Dependências do site (instalar com: pip install -r site/requirements.txt)
+streamlit>=1.40
+pandas>=2.0
+openpyxl>=3.1
