@@ -136,8 +136,10 @@ with tab1:
                     "PL do fundo (R$ mi)": df["PL do fundo (R$)"] / 1e6,
                     "% do PL": df["% do PL"] * 100,
                 })
-                st.dataframe(
+                st.caption("👇 Clique em um fundo para ver a carteira dele mês a mês.")
+                ev_fundo = st.dataframe(
                     mostrar, use_container_width=True, hide_index=True,
+                    on_select="rerun", selection_mode="single-row", key="sel_fundo",
                     column_config={
                         "Quantidade": st.column_config.NumberColumn(format="%.0f"),
                         "Valor mercado (R$ mi)": st.column_config.NumberColumn(
@@ -149,6 +151,26 @@ with tab1:
                 st.download_button(
                     "⬇️ Baixar CSV", df.to_csv(index=False).encode("utf-8-sig"),
                     f"fundos_{acao_sel}_{periodo_alvo}.csv", "text/csv")
+
+                # --- ao clicar num fundo: carteira dele mês a mês (matriz) ---
+                sel_f = ev_fundo.selection.rows if ev_fundo and ev_fundo.selection else []
+                if sel_f:
+                    fundo_row = df.iloc[sel_f[0]]
+                    cnpj_f = fundo_row["CNPJ"]
+                    nome_f = fundo_row["Fundo"]
+                    st.divider()
+                    st.subheader(f"🧾 Carteira de {nome_f[:60]}")
+                    st.caption(f"CNPJ {cnpj_f} · valor de mercado por ação, mês a mês "
+                               "(R$ milhões).")
+                    mat = fundos.matriz_ticker_mes_por_fundos([cnpj_f])
+                    if mat.empty:
+                        st.info("Sem carteira de ações para este fundo.")
+                    else:
+                        mat_mi = mat / 1e6
+                        st.dataframe(
+                            mat_mi.style.format("{:,.0f}")
+                                  .background_gradient(cmap="YlOrRd", axis=None),
+                            use_container_width=True)
 
 # ===================== ABA 2: RANKING =====================
 with tab2:
