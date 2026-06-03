@@ -127,6 +127,99 @@ def dividendos_anuais(ticker):
             "WHERE ticker=? ORDER BY ano", c, params=[ticker])
 
 
+# Estrutura das demonstrações (mesmos rótulos/contas do relatorio.py).
+# Cada item: (rótulo, campo). Campo None = linha calculada (tratada à parte).
+DRE_LINHAS = [
+    ("Receita Líquida", "receita_liquida"),
+    ("CPV / CMV", "custo_receita"),
+    ("Lucro Bruto", "lucro_bruto"),
+    ("Despesas Operacionais (SG&A)", "despesas_operacionais"),
+    ("Depreciação & Amortização", "depreciacao_amortizacao"),
+    ("EBIT", "ebit"),
+    ("EBITDA", "ebitda"),
+    ("Receitas Financeiras", "receitas_financeiras"),
+    ("Despesas Financeiras", "despesas_financeiras"),
+    ("Resultado Financeiro Líq.", "resultado_financeiro"),
+    ("EBT", "ebt"),
+    ("IR e CSLL", "ir_csll"),
+    ("Lucro Líquido", "lucro_liquido"),
+]
+
+BALANCO_LINHAS = [
+    ("Caixa + Aplicações Fin.", "caixa"),
+    ("Contas a Receber", "contas_receber"),
+    ("Estoques", "estoques"),
+    ("TOTAL ATIVO CIRCULANTE", "ativo_circulante"),
+    ("Imobilizado (líquido)", "imobilizado"),
+    ("Intangíveis", "intangivel"),
+    ("Investimentos", "investimentos"),
+    ("Outros Ativos NC", "outros_ativos_nc"),
+    ("TOTAL ATIVO NÃO CIRC.", "ativo_nao_circulante"),
+    ("TOTAL DO ATIVO", "ativo_total"),
+    ("Empréstimos CP", "emprestimos_cp"),
+    ("Fornecedores", "fornecedores"),
+    ("TOTAL PASSIVO CIRCULANTE", "passivo_circulante"),
+    ("Empréstimos LP", "emprestimos_lp"),
+    ("Debêntures", "debentures"),
+    ("TOTAL PASSIVO NÃO CIRC.", "passivo_nao_circulante"),
+    ("Capital Social", "capital_social"),
+    ("Reservas de Lucro", "reservas_lucro"),
+    ("Lucros / Prejuízos Acum.", "lucros_acumulados"),
+    ("TOTAL PATRIMÔNIO LÍQUIDO", "patrimonio_liquido"),
+    ("Dívida Bruta", "divida_bruta"),
+    ("Dívida Líquida", "divida_liquida"),
+]
+
+DFC_LINHAS = [
+    ("Lucro Líquido do Período", "lucro_liquido"),
+    ("(+) D&A", "depreciacao_amortizacao"),
+    ("FLUXO CAIXA OPERACIONAL", "fco"),
+    ("CAPEX", "capex"),
+    ("Venda de Ativos", "venda_ativos"),
+    ("Aquisições / Participações", "aquisicoes"),
+    ("FLUXO CAIXA INVESTIMENTOS", "fci"),
+    ("Captações", "captacoes"),
+    ("Pagamento de Dívidas", "pagamento_dividas"),
+    ("Recompra de Ações", "recompra_acoes"),
+    ("Dividendos / JCP Pagos", "dividendos_pagos"),
+    ("FLUXO CAIXA FINANCIAMENTOS", "fcf_financiamento"),
+    ("Variação Líquida de Caixa", "variacao_caixa"),
+    ("Caixa Inicial", "caixa_inicial"),
+    ("Caixa Final", "caixa_final"),
+    ("Free Cash Flow (FCO−CAPEX)", "fcl"),
+]
+
+
+def demonstracao(ticker, linhas, em_milhares=True):
+    """Monta uma demonstração no formato relatório: contas nas linhas, anos nas colunas.
+
+    `linhas` é uma das listas DRE_LINHAS / BALANCO_LINHAS / DFC_LINHAS.
+    Valores em R$ mil (em_milhares=True) como no relatorio.py.
+    """
+    df = financeiros(ticker)
+    if df.empty:
+        return pd.DataFrame()
+    anos = sorted(df["ano"].unique())
+    por_ano = {int(r["ano"]): r for _, r in df.iterrows()}
+
+    dados = {}
+    for rotulo, campo in linhas:
+        valores = []
+        for ano in anos:
+            linha = por_ano.get(int(ano))
+            v = None
+            if linha is not None and campo in linha.index:
+                x = linha[campo]
+                if x is not None and not pd.isna(x):
+                    v = float(x) / 1000 if em_milhares else float(x)
+            valores.append(v)
+        dados[rotulo] = valores
+
+    out = pd.DataFrame(dados, index=[int(a) for a in anos]).T
+    out.index.name = "Conta (R$ mil)" if em_milhares else "Conta (R$)"
+    return out
+
+
 def tabela_indicadores(ano=2025):
     """Indicadores de TODAS as ações num ano, em um único DataFrame (para triagem).
 

@@ -91,6 +91,48 @@ with tab1:
                 "ebitda": "EBITDA"})
             st.bar_chart(serie)
 
+        # --- Demonstrações financeiras (formato relatório, anos em colunas) ---
+        st.divider()
+        st.markdown("### 📑 Demonstrações financeiras  ·  valores em **R$ mil**")
+
+        def mostra_demonstracao(titulo, linhas):
+            dem = acoes.demonstracao(tk, linhas, em_milhares=True)
+            if dem.empty:
+                st.info(f"Sem dados para {titulo}.")
+                return
+            # destaca linhas de totais (TOTAL / EBITDA / Lucro Líquido)
+            def realca(s):
+                negrito = any(k in s.name for k in
+                              ("TOTAL", "EBITDA", "Lucro Líquido", "FLUXO", "Free Cash"))
+                return ["font-weight:bold" if negrito else "" for _ in s]
+            sty = (dem.style
+                   .format(lambda v: "-" if pd.isna(v) else f"{v:,.0f}")
+                   .apply(realca, axis=1))
+            st.dataframe(sty, use_container_width=True)
+
+        d1, d2, d3 = st.tabs(["DRE — Resultado", "Balanço", "DFC — Fluxo de Caixa"])
+        with d1:
+            mostra_demonstracao("DRE", acoes.DRE_LINHAS)
+        with d2:
+            mostra_demonstracao("Balanço", acoes.BALANCO_LINHAS)
+        with d3:
+            mostra_demonstracao("DFC", acoes.DFC_LINHAS)
+
+        # download das 3 juntas
+        partes = []
+        for nome, linhas in [("DRE", acoes.DRE_LINHAS),
+                             ("BALANCO", acoes.BALANCO_LINHAS),
+                             ("DFC", acoes.DFC_LINHAS)]:
+            d = acoes.demonstracao(tk, linhas)
+            if not d.empty:
+                d.insert(0, "Demonstração", nome)
+                partes.append(d)
+        if partes:
+            full = pd.concat(partes)
+            st.download_button("⬇️ Baixar demonstrações (CSV)",
+                               full.to_csv().encode("utf-8-sig"),
+                               f"demonstracoes_{tk}.csv", "text/csv")
+
 # ===================== ABA 2: COMPARAR =====================
 with tab2:
     st.markdown("Selecione ações para comparar lado a lado.")
