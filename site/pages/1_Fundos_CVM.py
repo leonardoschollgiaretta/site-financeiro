@@ -15,7 +15,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from lib import fundos
+from lib import acoes, fundos
 
 st.set_page_config(page_title="Fundos CVM", page_icon="🏦", layout="wide")
 st.title("🏦 Fundos CVM")
@@ -84,6 +84,39 @@ with tab1:
         st.info("💡 Selecione uma ação no filtro acima para destravar a série "
                 "mensal dela e poder clicar num mês.")
     else:
+        # --- cotação e market cap (banco financeiro) ---
+        fin = acoes.cotacao_e_marketcap(acao_sel)
+        if fin and fin["preco"]:
+            from datetime import datetime
+            mc1, mc2, mc3 = st.columns(3)
+            mc1.metric(f"Último preço ({fin.get('ticker_preco') or acao_sel})",
+                       fmt_valor(fin["preco"]))
+            mc2.metric("Ações totais (ON+PN)",
+                       pontua(fin["acoes_total"]) if fin["acoes_total"] else "-")
+            mc3.metric("Market cap", fmt_valor(fin["market_cap"]))
+            # data do preço + aviso se defasado
+            dstr = fin.get("data_preco")
+            legenda = f"Preço de fechamento em **{dstr}**" if dstr else "Data do preço indisponível"
+            try:
+                d = datetime.strptime(str(dstr)[:10], "%Y-%m-%d").date()
+                dias = (datetime.now().date() - d).days
+                if dias > 7:
+                    legenda += f" ⚠️ defasado ({dias} dias atrás)"
+            except (ValueError, TypeError):
+                pass
+            classes = []
+            if fin.get("ticker_on"):
+                classes.append(f"ON {fin['ticker_on']}")
+            if fin.get("ticker_pn"):
+                classes.append(f"PN {fin['ticker_pn']}")
+            if classes:
+                legenda += "  ·  classes: " + " + ".join(classes)
+            st.caption(legenda)
+        else:
+            st.caption("ℹ️ Sem preço no banco financeiro para esta ação "
+                       "(market cap indisponível).")
+        st.divider()
+
         st.subheader(f"{acao_sel} — fundos e valor aplicado por mês")
         st.caption("Clique em um mês na tabela para ver os fundos detentores embaixo.")
         serie = fundos.resumo_acao_por_mes(acao_sel)

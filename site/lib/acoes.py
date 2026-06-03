@@ -220,6 +220,55 @@ def demonstracao(ticker, linhas, em_milhares=True):
     return out
 
 
+def cotacao_e_marketcap(ticker):
+    """Cruza o banco financeiro para um ticker (que pode ser ON ou PN).
+
+    Acha o registro consolidado da empresa (acoes_total já soma ON+PN),
+    pega o último preço disponível e calcula market cap = preço × ações totais.
+
+    Retorna dict: {nome, ticker_dados, preco, data_preco, atualizado_em,
+                   acoes_total, market_cap, ticker_on, ticker_pn} ou None.
+    """
+    tk = ticker.upper()
+    with conn_financeiro() as c:
+        # 1) registro com dados de ações (direto, ou via ticker_on/ticker_pn)
+        row = c.execute(
+            "SELECT ticker, nome, acoes_total, acoes_atualizadas_em, ticker_on, ticker_pn "
+            "FROM empresas WHERE ticker=? AND acoes_total IS NOT NULL", [tk]).fetchone()
+        if not row:
+            row = c.execute(
+                "SELECT ticker, nome, acoes_total, acoes_atualizadas_em, ticker_on, ticker_pn "
+                "FROM empresas WHERE (ticker_on=? OR ticker_pn=?) "
+                "AND acoes_total IS NOT NULL LIMIT 1", [tk, tk]).fetchone()
+        if not row:
+            return None
+        ticker_dados, nome, acoes_total, acoes_em, t_on, t_pn = row
+
+        # 2) preço: tenta o ticker pedido; senão o ticker_dados; senão ON/PN
+        preco = data_preco = atualizado = None
+        for cand in [tk, ticker_dados, t_pn, t_on]:
+            if not cand:
+                continue
+            p = c.execute(
+                "SELECT preco, data_fechamento, atualizado_em FROM preco_atual WHERE ticker=?",
+                [cand]).fetchone()
+            if p and p[0]:
+                preco, data_preco, atualizado = float(p[0]), p[1], p[2]
+                ticker_preco = cand
+                break
+        else:
+            ticker_preco = None
+
+    acoes_total = float(acoes_total) if acoes_total else None
+    market_cap = preco * acoes_total if (preco and acoes_total) else None
+    return {
+        "nome": nome, "ticker_dados": ticker_dados, "ticker_preco": ticker_preco,
+        "preco": preco, "data_preco": data_preco, "atualizado_em": atualizado,
+        "acoes_total": acoes_total, "market_cap": market_cap,
+        "ticker_on": t_on, "ticker_pn": t_pn,
+    }
+
+
 def tabela_indicadores(ano=2025):
     """Indicadores de TODAS as ações num ano, em um único DataFrame (para triagem).
 
