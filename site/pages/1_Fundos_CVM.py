@@ -69,9 +69,9 @@ with tab1:
         st.dataframe(
             mostrar, use_container_width=True, hide_index=True,
             column_config={
-                "Valor mercado (R$)": st.column_config.NumberColumn(format="R$ %.0f"),
-                "PL do fundo (R$)": st.column_config.NumberColumn(format="R$ %.0f"),
-                "Quantidade": st.column_config.NumberColumn(format="%.0f"),
+                "Valor mercado (R$)": st.column_config.NumberColumn(format="R$ %,.0f"),
+                "PL do fundo (R$)": st.column_config.NumberColumn(format="R$ %,.0f"),
+                "Quantidade": st.column_config.NumberColumn(format="%,.0f"),
                 "% do PL": st.column_config.NumberColumn(format="%.2f%%"),
             },
         )
@@ -92,10 +92,15 @@ with tab2:
         limite = st.slider("Quantas ações", 5, 100, 30, step=5)
 
     rk = fundos.ranking_acoes(periodo_r, por=por, limite=limite)
+    rk_show = rk.copy()
+    # coluna-resumo legível (R$ 20,61 bi) ao lado do número completo
+    rk_show.insert(rk_show.columns.get_loc("Valor agregado (R$)") + 1,
+                   "Valor (resumo)", rk_show["Valor agregado (R$)"].map(fmt_valor))
     st.dataframe(
-        rk, use_container_width=True, hide_index=True,
+        rk_show, use_container_width=True, hide_index=True,
         column_config={
-            "Valor agregado (R$)": st.column_config.NumberColumn(format="R$ %.0f"),
+            "Valor agregado (R$)": st.column_config.NumberColumn(format="R$ %,.0f"),
+            "Nº fundos": st.column_config.NumberColumn(format="%,.0f"),
         },
     )
     st.bar_chart(rk.set_index("Ticker")[
@@ -104,16 +109,51 @@ with tab2:
 # ===================== ABA 3: EVOLUÇÃO =====================
 with tab3:
     st.subheader("Evolução do valor de mercado por ação (mês a mês)")
-    st.caption("Cada célula = soma do valor de mercado (R$) de todos os fundos "
-               "naquele ticker, naquele mês.")
-    top = st.slider("Mostrar quantas ações (maiores no último mês)", 10, 200, 50, step=10)
+    st.caption("Cada célula = soma do valor de mercado dos fundos selecionados "
+               "naquele ticker, naquele mês. **Valores em R$ milhões.**")
 
-    m = fundos.matriz_ticker_mes(top=top)
-    if m.empty:
-        st.warning("Sem dados para a matriz.")
+    modo = st.radio("Quais fundos somar?",
+                    ["Todos os fundos", "Escolher fundos"],
+                    horizontal=True)
+
+    if modo == "Todos os fundos":
+        top = st.slider("Mostrar quantas ações (maiores no último mês)",
+                        10, 200, 50, step=10)
+        m = fundos.matriz_ticker_mes(top=top)
+        legenda_fundos = "todos os fundos"
     else:
+        # busca por nome -> seleção múltipla
+        termo = st.text_input("Buscar fundo por nome (ex.: REAL INVESTOR, GERAÇÃO...)",
+                              placeholder="digite parte do nome do fundo")
+        cat = fundos.buscar_fundos(termo)
+        if cat.empty:
+            st.info("Digite um nome para listar os fundos. Nenhum encontrado ainda."
+                    if termo else "Digite parte do nome de um fundo acima.")
+            m = None
+            legenda_fundos = ""
+        else:
+            opcoes = cat["rotulo"].tolist()
+            mapa = dict(zip(cat["rotulo"], cat["cnpj"]))
+            escolhidos = st.multiselect(
+                f"Selecione um ou mais fundos ({len(opcoes)} encontrados)",
+                opcoes)
+            if not escolhidos:
+                st.info("Selecione pelo menos um fundo na lista acima.")
+                m = None
+            else:
+                cnpjs = [mapa[r] for r in escolhidos]
+                m = fundos.matriz_ticker_mes_por_fundos(cnpjs)
+            legenda_fundos = f"{len(escolhidos)} fundo(s) selecionado(s)" if escolhidos else ""
+
+    if m is None:
+        pass  # nada selecionado ainda
+    elif m.empty:
+        st.warning("Sem posições em ações para os fundos selecionados.")
+    else:
+        st.caption(f"Somando: **{legenda_fundos}** · {len(m)} ações")
+        m_mi = m / 1e6  # exibe em milhões para legibilidade
         st.dataframe(
-            m.style.format("{:,.0f}").background_gradient(cmap="YlOrRd", axis=None),
+            m_mi.style.format("{:,.0f}").background_gradient(cmap="YlOrRd", axis=None),
             use_container_width=True,
         )
         st.download_button("⬇️ Baixar matriz (CSV)",

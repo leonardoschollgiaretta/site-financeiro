@@ -146,3 +146,59 @@ def matriz_ticker_mes(top=None):
     pivot.columns = [periodo_humano(p) for p in pivot.columns]
     pivot.index.name = "Ticker"
     return pivot
+
+
+def buscar_fundos(termo="", limite=300):
+    """Lista fundos (cnpj + nome) cujo nome contém o termo. Distintos no banco todo.
+
+    Retorna DataFrame com colunas: cnpj, denominacao, rotulo (cnpj — nome).
+    """
+    termo = (termo or "").strip().upper()
+    where = "WHERE denominacao IS NOT NULL AND denominacao <> ''"
+    params = []
+    if termo:
+        where += " AND UPPER(denominacao) LIKE ?"
+        params.append(f"%{termo}%")
+    sql = f"""
+        SELECT cnpj, denominacao
+        FROM fundos
+        {where}
+        GROUP BY cnpj
+        ORDER BY denominacao
+        LIMIT ?
+    """
+    params.append(limite)
+    with conn_fundos() as c:
+        df = pd.read_sql_query(sql, c, params=params)
+    if not df.empty:
+        df["rotulo"] = df["cnpj"] + " — " + df["denominacao"].str.slice(0, 70)
+    return df
+
+
+def matriz_ticker_mes_por_fundos(cnpjs):
+    """Matriz ticker × mês, mas SOMANDO apenas os fundos (CNPJs) informados.
+
+    Mesma estrutura de matriz_ticker_mes, sem corte de 'top'.
+    """
+    if not cnpjs:
+        return pd.DataFrame()
+    placeholders = ",".join("?" * len(cnpjs))
+    sql = f"""
+        SELECT cd_ativo, periodo, SUM(vl_mercado) AS vl
+        FROM posicoes_acoes
+        WHERE cnpj_fundo IN ({placeholders})
+          AND cd_ativo IS NOT NULL AND cd_ativo <> ''
+        GROUP BY cd_ativo, periodo
+    """
+    with conn_fundos() as c:
+        df = pd.read_sql_query(sql, c, params=list(cnpjs))
+    if df.empty:
+        return df
+    pivot = df.pivot_table(index="cd_ativo", columns="periodo",
+                           values="vl", aggfunc="sum", fill_value=0)
+    pivot = pivot[(pivot != 0).any(axis=1)]
+    ult = pivot.columns[-1]
+    pivot = pivot.sort_values(ult, ascending=False)
+    pivot.columns = [periodo_humano(p) for p in pivot.columns]
+    pivot.index.name = "Ticker"
+    return pivot
