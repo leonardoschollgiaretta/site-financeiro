@@ -50,7 +50,12 @@ with tab1:
                "Meses recentes costumam ter menos declarações (defasagem da CVM).")
     cob = fundos.resumo_cobertura_por_mes()
     sty_cob = (cob.style
-               .format("{:,.0f}")
+               .format({
+                   "Total de fundos": lambda v: f"{v:,.0f}".replace(",", "."),
+                   "Com posição em ações": lambda v: f"{v:,.0f}".replace(",", "."),
+                   "Sem posição em ações": lambda v: f"{v:,.0f}".replace(",", "."),
+                   "Valor aplicado (R$)": fmt_valor,
+               })
                .set_table_styles([
                    {"selector": "th.col_heading",
                     "props": [("background-color", "#0E2841"), ("color", "white"),

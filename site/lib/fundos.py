@@ -68,10 +68,10 @@ def resumo_cobertura_por_mes():
         tot = pd.read_sql_query(
             "SELECT periodo, COUNT(DISTINCT cnpj) AS total_fundos "
             "FROM fundos GROUP BY periodo", c)
-        # fundos com posição em ações + nº de posições, por período
+        # fundos com posição em ações + valor total aplicado, por período
         comp = pd.read_sql_query(
             "SELECT periodo, COUNT(DISTINCT cnpj_fundo) AS com_posicao, "
-            "COUNT(*) AS total_posicoes "
+            "SUM(vl_mercado) AS valor_aplicado "
             "FROM posicoes_acoes WHERE cd_ativo IS NOT NULL AND cd_ativo <> '' "
             "GROUP BY periodo", c)
 
@@ -79,13 +79,13 @@ def resumo_cobertura_por_mes():
     df = df.sort_values("periodo")
     df["com_posicao"] = df["com_posicao"].astype(int)
     df["total_fundos"] = df["total_fundos"].astype(int)
-    df["total_posicoes"] = df["total_posicoes"].astype(int)
+    df["valor_aplicado"] = df["valor_aplicado"].astype(float)
     df["sem_posicao"] = (df["total_fundos"] - df["com_posicao"]).clip(lower=0)
     df["Período"] = df["periodo"].map(periodo_humano)
     df = df.set_index("Período")[
-        ["total_fundos", "com_posicao", "sem_posicao", "total_posicoes"]]
+        ["total_fundos", "com_posicao", "sem_posicao", "valor_aplicado"]]
     df.columns = ["Total de fundos", "Com posição em ações",
-                  "Sem posição em ações", "Total de posições"]
+                  "Sem posição em ações", "Valor aplicado (R$)"]
     return df
 
 
