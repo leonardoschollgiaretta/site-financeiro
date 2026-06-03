@@ -21,10 +21,12 @@ st.caption("Site interno — dados de Fundos CVM e Ações. Uso local.")
 
 st.markdown(
     """
-    Bem-vindo. Use o menu à esquerda para navegar:
+    Bem-vindo. Use o menu à esquerda para navegar. O site tem duas áreas:
 
-    - **Fundos CVM** — quem detém cada ação, ranking e evolução mês a mês.
-    - *(em breve)* **Ações** — indicadores e rankings do módulo financeiro.
+    - **🏦 Fundos CVM** — analisar as *posições dos fundos*: quem detém cada
+      ação, ranking e evolução mês a mês.
+    - **📈 Ações** — analisar os *fundamentos das ações*: indicadores,
+      comparação, triagem e dividendos.
     """
 )
 

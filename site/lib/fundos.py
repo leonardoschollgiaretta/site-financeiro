@@ -148,30 +148,38 @@ def matriz_ticker_mes(top=None):
     return pivot
 
 
-def buscar_fundos(termo="", limite=300):
+def buscar_fundos(termo="", limite=300, apenas_com_acoes=False):
     """Lista fundos (cnpj + nome) cujo nome contém o termo. Distintos no banco todo.
 
-    Retorna DataFrame com colunas: cnpj, denominacao, rotulo (cnpj — nome).
+    apenas_com_acoes: se True, retorna só fundos que têm ao menos uma posição
+    em ações (filtra fora as classes 'em cotas' que não investem em ações).
+
+    Retorna DataFrame com colunas: cnpj, denominacao, rotulo (nome · cnpj).
     """
     termo = (termo or "").strip().upper()
-    where = "WHERE denominacao IS NOT NULL AND denominacao <> ''"
+    where = "WHERE f.denominacao IS NOT NULL AND f.denominacao <> ''"
     params = []
     if termo:
-        where += " AND UPPER(denominacao) LIKE ?"
+        where += " AND UPPER(f.denominacao) LIKE ?"
         params.append(f"%{termo}%")
+    if apenas_com_acoes:
+        # só fundos com pelo menos 1 posição em ações em algum período
+        where += (" AND f.cnpj IN (SELECT DISTINCT cnpj_fundo FROM posicoes_acoes "
+                  "WHERE cd_ativo IS NOT NULL AND cd_ativo <> '')")
     sql = f"""
-        SELECT cnpj, denominacao
-        FROM fundos
+        SELECT f.cnpj AS cnpj, f.denominacao AS denominacao
+        FROM fundos f
         {where}
-        GROUP BY cnpj
-        ORDER BY denominacao
+        GROUP BY f.cnpj
+        ORDER BY f.denominacao
         LIMIT ?
     """
     params.append(limite)
     with conn_fundos() as c:
         df = pd.read_sql_query(sql, c, params=params)
     if not df.empty:
-        df["rotulo"] = df["cnpj"] + " — " + df["denominacao"].str.slice(0, 70)
+        # nome primeiro (o que o usuário lê), CNPJ no fim para diferenciar homônimos
+        df["rotulo"] = df["denominacao"].str.slice(0, 75) + "  ·  " + df["cnpj"]
     return df
 
 

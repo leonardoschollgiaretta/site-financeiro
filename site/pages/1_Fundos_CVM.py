@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from lib import fundos
@@ -106,6 +107,36 @@ with tab2:
     st.bar_chart(rk.set_index("Ticker")[
         "Nº fundos" if por == "fundos" else "Valor agregado (R$)"])
 
+    # --- treemap: quanto maior a ação, maior o quadrado ---
+    st.markdown("**Mapa de proporção** — cada quadrado é uma ação; o tamanho "
+                "reflete a métrica escolhida abaixo.")
+    metrica = st.radio(
+        "Tamanho do quadrado por:",
+        ["Valor aplicado", "Nº de fundos"],
+        horizontal=True, key="treemap_metrica")
+    por_valor = metrica == "Valor aplicado"
+    col_val = "Valor agregado (R$)" if por_valor else "Nº fundos"
+    # ordena pela própria métrica do treemap (coerência tamanho x posição)
+    tm = rk.sort_values(col_val, ascending=False).copy()
+    tm["rotulo_val"] = (tm[col_val].map(fmt_valor) if por_valor
+                        else tm[col_val].map(lambda v: f"{int(v):,}".replace(",", ".") + " fundos"))
+    fig = px.treemap(
+        tm,
+        path=[px.Constant("Total"), "Ticker"],
+        values=col_val,
+        color=col_val,
+        color_continuous_scale="YlOrRd",
+        custom_data=["rotulo_val"],
+    )
+    fig.update_traces(
+        texttemplate="<b>%{label}</b><br>%{customdata[0]}",
+        textposition="middle center",
+        hovertemplate="<b>%{label}</b><br>%{customdata[0]}<extra></extra>",
+    )
+    fig.update_layout(margin=dict(t=10, l=0, r=0, b=0), height=450,
+                      coloraxis_showscale=False)
+    st.plotly_chart(fig, use_container_width=True)
+
 # ===================== ABA 3: EVOLUÇÃO =====================
 with tab3:
     st.subheader("Evolução do valor de mercado por ação (mês a mês)")
@@ -122,38 +153,63 @@ with tab3:
         m = fundos.matriz_ticker_mes(top=top)
         legenda_fundos = "todos os fundos"
     else:
-        # busca por nome -> seleção múltipla
-        termo = st.text_input("Buscar fundo por nome (ex.: REAL INVESTOR, GERAÇÃO...)",
-                              placeholder="digite parte do nome do fundo")
-        cat = fundos.buscar_fundos(termo)
-        if cat.empty:
-            st.info("Digite um nome para listar os fundos. Nenhum encontrado ainda."
-                    if termo else "Digite parte do nome de um fundo acima.")
+        # caixa única: clique e digite para buscar (só fundos com ações)
+        cat = fundos.buscar_fundos(apenas_com_acoes=True, limite=10000)
+        opcoes = cat["rotulo"].tolist()
+        mapa = dict(zip(cat["rotulo"], cat["cnpj"]))
+        escolhidos = st.multiselect(
+            f"Fundo(s) — clique e digite para buscar ({len(opcoes)} fundos com ações)",
+            opcoes,
+            placeholder="ex.: GERAÇÃO, REAL INVESTOR, SPX...")
+        if not escolhidos:
+            st.info("Selecione um ou mais fundos acima.")
             m = None
             legenda_fundos = ""
         else:
-            opcoes = cat["rotulo"].tolist()
-            mapa = dict(zip(cat["rotulo"], cat["cnpj"]))
-            escolhidos = st.multiselect(
-                f"Selecione um ou mais fundos ({len(opcoes)} encontrados)",
-                opcoes)
-            if not escolhidos:
-                st.info("Selecione pelo menos um fundo na lista acima.")
-                m = None
-            else:
-                cnpjs = [mapa[r] for r in escolhidos]
-                m = fundos.matriz_ticker_mes_por_fundos(cnpjs)
-            legenda_fundos = f"{len(escolhidos)} fundo(s) selecionado(s)" if escolhidos else ""
+            cnpjs = [mapa[r] for r in escolhidos]
+            m = fundos.matriz_ticker_mes_por_fundos(cnpjs)
+            legenda_fundos = f"{len(escolhidos)} fundo(s) selecionado(s)"
 
     if m is None:
         pass  # nada selecionado ainda
     elif m.empty:
-        st.warning("Sem posições em ações para os fundos selecionados.")
+        st.warning(
+            "Os fundos selecionados não têm posição em **ações** neste banco.\n\n"
+            "Dica: alguns fundos (ex.: classes 'FIF em cotas') investem em **cotas "
+            "de outros fundos**, não em ações diretas — por isso não aparecem aqui. "
+            "Procure a versão do fundo que é 'FUNDO DE INVESTIMENTO ... DE AÇÕES'."
+        )
     else:
-        st.caption(f"Somando: **{legenda_fundos}** · {len(m)} ações")
-        m_mi = m / 1e6  # exibe em milhões para legibilidade
+        st.caption(f"Somando: **{legenda_fundos}** · {len(m)} ações · valores em reais")
+
+        def fmt_celula(v):
+            if v is None or pd.isna(v) or v == 0:
+                return "-"
+            if abs(v) >= 1e9:
+                return f"R$ {v/1e9:,.2f} bi"
+            if abs(v) >= 1e6:
+                return f"R$ {v/1e6:,.2f} mi"
+            if abs(v) >= 1e3:
+                return f"R$ {v/1e3:,.0f} mil"
+            return f"R$ {v:,.0f}"
+
+        # --- linha de TOTAL por mês (valor do fundo em ações), fixa no topo ---
+        totais = m.sum(axis=0)  # soma todas as ações, por mês
+        st.markdown("**Total em ações por mês** (soma de todas as posições)")
+        cols = st.columns(len(totais))
+        meses_list = list(totais.index)
+        for i, col in enumerate(cols):
+            mes = meses_list[i]
+            atual = totais.iloc[i]
+            # variação vs mês anterior
+            delta = None
+            if i > 0 and totais.iloc[i - 1]:
+                var = (atual - totais.iloc[i - 1]) / totais.iloc[i - 1]
+                delta = f"{var*100:+.1f}%"
+            col.metric(mes, fmt_celula(atual), delta)
+
         st.dataframe(
-            m_mi.style.format("{:,.0f}").background_gradient(cmap="YlOrRd", axis=None),
+            m.style.format(fmt_celula).background_gradient(cmap="YlOrRd", axis=None),
             use_container_width=True,
         )
         st.download_button("⬇️ Baixar matriz (CSV)",
