@@ -132,42 +132,87 @@ with tab2:
 
 # ===================== ABA 3: TRIAGEM =====================
 with tab3:
-    st.markdown("Filtrar ações por faixas de indicadores (ano de referência: 2025).")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        pl_max = st.number_input("P/L máximo", value=15.0, step=1.0)
-    with c2:
-        roe_min = st.number_input("ROE mínimo (%)", value=15.0, step=1.0)
-    with c3:
-        margem_min = st.number_input("Margem líq. mínima (%)", value=10.0, step=1.0)
+    st.markdown("Filtre o universo de ações por critérios. **Marque** os filtros "
+                "que quer aplicar — os desmarcados são ignorados.")
 
-    if st.button("Rodar triagem"):
-        with st.spinner("Calculando..."):
-            res = []
-            for tk in lista:
-                ind = acoes.indicadores_ano(tk, 2025)
-                if not ind:
-                    continue
-                pl, roe, ml = ind["P/L"], ind["ROE"], ind["Margem líquida"]
-                if pl is None or roe is None or ml is None:
-                    continue
-                if 0 < pl <= pl_max and roe >= roe_min / 100 and ml >= margem_min / 100:
-                    res.append({"Ticker": tk, "P/L": pl, "ROE": roe,
-                                "Margem líq.": ml, "Lucro líq.": ind["Lucro líquido"]})
-            if res:
-                df = pd.DataFrame(res).sort_values("ROE", ascending=False)
-                st.success(f"{len(df)} ações passaram no filtro.")
-                st.dataframe(
-                    df, use_container_width=True, hide_index=True,
-                    column_config={
-                        "P/L": st.column_config.NumberColumn(format="%.1fx"),
-                        "ROE": st.column_config.NumberColumn(format="%.1f%%"),
-                        "Margem líq.": st.column_config.NumberColumn(format="%.1f%%"),
-                        "Lucro líq.": st.column_config.NumberColumn(format="R$ %,.0f"),
-                    },
-                )
-            else:
-                st.info("Nenhuma ação passou nos filtros.")
+    @st.cache_data(show_spinner="Calculando indicadores de todas as ações...")
+    def carregar_tabela(ano):
+        return acoes.tabela_indicadores(ano)
+
+    ano3 = st.selectbox("Ano de referência", acoes.ANOS,
+                        index=len(acoes.ANOS) - 1, key="ano_triagem")
+    base = carregar_tabela(ano3)
+    if base.empty:
+        st.warning("Sem dados.")
+        st.stop()
+
+    # cada filtro: (rótulo, coluna, operador, valor_default, é_percentual, é_multiplo_de_mi)
+    st.markdown("**Critérios**")
+    col_a, col_b = st.columns(2)
+    filtros = []  # (coluna, operador, valor, label)
+
+    with col_a:
+        if st.checkbox("P/L máximo", value=True):
+            v = st.number_input("P/L ≤", value=15.0, step=1.0, key="f_pl")
+            filtros.append(("P/L", "<=", v, "P/L"))
+        if st.checkbox("P/VP máximo"):
+            v = st.number_input("P/VP ≤", value=3.0, step=0.5, key="f_pvp")
+            filtros.append(("P/VP", "<=", v, "P/VP"))
+        if st.checkbox("Dív.líq./EBITDA máximo"):
+            v = st.number_input("Dív.líq./EBITDA ≤", value=3.0, step=0.5, key="f_dl")
+            filtros.append(("Dív. líq. / EBITDA", "<=", v, "Dív.líq./EBITDA"))
+    with col_b:
+        if st.checkbox("ROE mínimo (%)", value=True):
+            v = st.number_input("ROE ≥ (%)", value=15.0, step=1.0, key="f_roe")
+            filtros.append(("ROE", ">=", v / 100, "ROE"))
+        if st.checkbox("Margem líq. mínima (%)", value=True):
+            v = st.number_input("Margem líq. ≥ (%)", value=10.0, step=1.0, key="f_ml")
+            filtros.append(("Margem líquida", ">=", v / 100, "Margem líq."))
+        if st.checkbox("Market Cap mínimo (R$ bi)"):
+            v = st.number_input("Market Cap ≥ (R$ bi)", value=1.0, step=0.5, key="f_mc")
+            filtros.append(("Market Cap", ">=", v * 1e9, "Market Cap mín"))
+
+    # aplica filtros
+    df = base.copy()
+    for coluna, op, valor, _ in filtros:
+        if coluna not in df.columns:
+            continue
+        serie = pd.to_numeric(df[coluna], errors="coerce")
+        if op == "<=":
+            # P/L e P/VP: ignora negativos (prejuízo/PL negativo) e nulos
+            df = df[(serie.notna()) & (serie > 0) & (serie <= valor)]
+        else:
+            df = df[(serie.notna()) & (serie >= valor)]
+
+    ativos = ", ".join(l for *_, l in filtros) or "nenhum"
+    st.caption(f"Filtros ativos: {ativos}")
+
+    if df.empty:
+        st.info("Nenhuma ação passou nos filtros. Tente afrouxar os critérios.")
+    else:
+        st.success(f"**{len(df)}** ações passaram.")
+        cols_show = ["Ticker", "Preço", "Market Cap", "Receita líquida",
+                     "Lucro líquido", "Margem líquida", "ROE", "P/L", "P/VP",
+                     "Dív. líq. / EBITDA"]
+        cols_show = [c for c in cols_show if c in df.columns]
+        out = df[cols_show].sort_values("ROE", ascending=False)
+        st.dataframe(
+            out, use_container_width=True, hide_index=True,
+            column_config={
+                "Preço": st.column_config.NumberColumn(format="R$ %.2f"),
+                "Market Cap": st.column_config.NumberColumn(format="R$ %,.0f"),
+                "Receita líquida": st.column_config.NumberColumn(format="R$ %,.0f"),
+                "Lucro líquido": st.column_config.NumberColumn(format="R$ %,.0f"),
+                "Margem líquida": st.column_config.NumberColumn(format="%.1f%%"),
+                "ROE": st.column_config.NumberColumn(format="%.1f%%"),
+                "P/L": st.column_config.NumberColumn(format="%.1fx"),
+                "P/VP": st.column_config.NumberColumn(format="%.1fx"),
+                "Dív. líq. / EBITDA": st.column_config.NumberColumn(format="%.1fx"),
+            },
+        )
+        st.download_button("⬇️ Baixar resultado (CSV)",
+                           out.to_csv(index=False).encode("utf-8"),
+                           f"triagem_acoes_{ano3}.csv", "text/csv")
 
 # ===================== ABA 4: DIVIDENDOS =====================
 with tab4:

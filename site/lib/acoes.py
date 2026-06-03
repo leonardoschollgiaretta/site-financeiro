@@ -125,3 +125,21 @@ def dividendos_anuais(ticker):
         return pd.read_sql_query(
             "SELECT ano, dividendo_por_acao FROM dividendos_anuais "
             "WHERE ticker=? ORDER BY ano", c, params=[ticker])
+
+
+def tabela_indicadores(ano=2025):
+    """Indicadores de TODAS as ações num ano, em um único DataFrame (para triagem).
+
+    Uma linha por ticker; colunas = indicadores. Valores None quando faltam.
+    """
+    linhas = []
+    for tk in tickers():
+        ind = indicadores_ano(tk, ano)
+        if not ind:
+            continue
+        linha = {"Ticker": tk}
+        linha.update(ind)
+        linhas.append(linha)
+    if not linhas:
+        return pd.DataFrame()
+    return pd.DataFrame(linhas)
