@@ -140,6 +140,7 @@ with tab2:
                                 default=[t for t in ["PETR4", "VALE3", "ITUB4"] if t in lista])
     ano2 = st.selectbox("Ano", acoes.ANOS, index=len(acoes.ANOS) - 1, key="ano_comp")
 
+    st.caption("🟢 verde = melhor · 🔴 vermelho = pior (por indicador).")
     if escolhidas:
         linhas = []
         for tk in escolhidas:
@@ -158,19 +159,54 @@ with tab2:
                 })
         if linhas:
             df = pd.DataFrame(linhas).set_index("Ticker")
-            st.dataframe(
-                df, use_container_width=True,
-                column_config={
-                    "Preço": st.column_config.NumberColumn(format="R$ %.2f"),
-                    "Market Cap": st.column_config.NumberColumn(format="R$ %,.0f"),
-                    "Receita líq.": st.column_config.NumberColumn(format="R$ %,.0f"),
-                    "Lucro líq.": st.column_config.NumberColumn(format="R$ %,.0f"),
-                    "Margem líq.": st.column_config.NumberColumn(format="%.1f%%"),
-                    "ROE": st.column_config.NumberColumn(format="%.1f%%"),
-                    "P/L": st.column_config.NumberColumn(format="%.1fx"),
-                    "P/VP": st.column_config.NumberColumn(format="%.1fx"),
-                },
-            )
+
+            FORMATOS = {
+                "Preço": fmt_valor, "Market Cap": fmt_valor,
+                "Receita líq.": fmt_valor, "Lucro líq.": fmt_valor,
+                "Margem líq.": fmt_pct, "ROE": fmt_pct,
+                "P/L": fmt_mult, "P/VP": fmt_mult,
+            }
+            # cor condicional SÓ nestas 3, em tons suaves; (col, maior_é_melhor)
+            COLORIR = [("Margem líq.", True), ("ROE", True), ("P/L", False)]
+
+            def escala_suave(serie, maior_melhor):
+                """Verde-claro (melhor) -> vermelho-claro (pior), tons pastel."""
+                s = pd.to_numeric(serie, errors="coerce")
+                vmin, vmax = s.min(), s.max()
+                estilos = []
+                for v in s:
+                    if pd.isna(v) or vmax == vmin:
+                        estilos.append("")
+                        continue
+                    r = (v - vmin) / (vmax - vmin)          # 0..1
+                    if not maior_melhor:
+                        r = 1 - r                            # inverte (menor é melhor)
+                    # interpola entre vermelho-claro (#F8D7DA) e verde-claro (#D4EDDA)
+                    r1, g1, b1 = 0xF8, 0xD7, 0xDA            # ruim
+                    r2, g2, b2 = 0xD4, 0xED, 0xDA            # bom
+                    rr = int(r1 + (r2 - r1) * r)
+                    gg = int(g1 + (g2 - g1) * r)
+                    bb = int(b1 + (b2 - b1) * r)
+                    estilos.append(f"background-color:#{rr:02X}{gg:02X}{bb:02X}; color:#333")
+                return estilos
+
+            sty = (df.style
+                   .format(FORMATOS)
+                   .set_properties(**{"text-align": "center", "font-size": "13px"})
+                   .set_table_styles([
+                       {"selector": "th",
+                        "props": [("background-color", "#1F4E79"),
+                                  ("color", "white"), ("font-weight", "bold"),
+                                  ("text-align", "center")]},
+                       {"selector": "th.row_heading",
+                        "props": [("background-color", "#1F4E79"),
+                                  ("color", "white")]},
+                   ]))
+            if len(df) >= 2:
+                for col, maior in COLORIR:
+                    if col in df.columns and pd.to_numeric(df[col], errors="coerce").notna().sum() >= 2:
+                        sty = sty.apply(lambda s, m=maior: escala_suave(s, m), subset=[col])
+            st.dataframe(sty, use_container_width=True)
 
 # ===================== ABA 3: TRIAGEM =====================
 with tab3:
@@ -233,27 +269,23 @@ with tab3:
         st.info("Nenhuma ação passou nos filtros. Tente afrouxar os critérios.")
     else:
         st.success(f"**{len(df)}** ações passaram.")
-        cols_show = ["Ticker", "Preço", "Market Cap", "Receita líquida",
-                     "Lucro líquido", "Margem líquida", "ROE", "P/L", "P/VP",
-                     "Dív. líq. / EBITDA"]
-        cols_show = [c for c in cols_show if c in df.columns]
-        out = df[cols_show].sort_values("ROE", ascending=False)
-        st.dataframe(
-            out, use_container_width=True, hide_index=True,
-            column_config={
-                "Preço": st.column_config.NumberColumn(format="R$ %.2f"),
-                "Market Cap": st.column_config.NumberColumn(format="R$ %,.0f"),
-                "Receita líquida": st.column_config.NumberColumn(format="R$ %,.0f"),
-                "Lucro líquido": st.column_config.NumberColumn(format="R$ %,.0f"),
-                "Margem líquida": st.column_config.NumberColumn(format="%.1f%%"),
-                "ROE": st.column_config.NumberColumn(format="%.1f%%"),
-                "P/L": st.column_config.NumberColumn(format="%.1fx"),
-                "P/VP": st.column_config.NumberColumn(format="%.1fx"),
-                "Dív. líq. / EBITDA": st.column_config.NumberColumn(format="%.1fx"),
-            },
-        )
+        out = df.sort_values("ROE", ascending=False)
+        # tabela formatada para leitura (valores em bi/mi, % em 30% etc.)
+        leitura = pd.DataFrame({
+            "Ticker": out["Ticker"],
+            "Preço": out["Preço"].map(fmt_valor),
+            "Market Cap": out["Market Cap"].map(fmt_valor),
+            "Receita líq.": out["Receita líquida"].map(fmt_valor),
+            "Lucro líq.": out["Lucro líquido"].map(fmt_valor),
+            "Margem líq.": out["Margem líquida"].map(fmt_pct),
+            "ROE": out["ROE"].map(fmt_pct),
+            "P/L": out["P/L"].map(fmt_mult),
+            "P/VP": out["P/VP"].map(fmt_mult),
+            "Dív.líq./EBITDA": out["Dív. líq. / EBITDA"].map(fmt_mult),
+        })
+        st.dataframe(leitura, use_container_width=True, hide_index=True)
         st.download_button("⬇️ Baixar resultado (CSV)",
-                           out.to_csv(index=False).encode("utf-8"),
+                           out.to_csv(index=False).encode("utf-8-sig"),
                            f"triagem_acoes_{ano3}.csv", "text/csv")
 
 # ===================== ABA 4: DIVIDENDOS =====================
