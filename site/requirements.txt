@@ -1,4 +1,7 @@
-# Dependências do site (instalar com: pip install -r site/requirements.txt)
+# Dependências do site (deploy Streamlit Cloud + uso local).
 streamlit>=1.40
 pandas>=2.0
+numpy>=1.26
 openpyxl>=3.1
+plotly>=5.18
+streamlit-aggrid>=1.0
