@@ -8,10 +8,13 @@
 *.db.bak_*
 *.sqlite
 *.sqlite3
-# EXCEÇÃO: cópias leves versionadas p/ o deploy na nuvem (Streamlit Cloud).
+# EXCEÇÃO: cópias versionadas p/ o deploy na nuvem (Streamlit Cloud).
 !site/dados_nuvem/
 !site/dados_nuvem/financeiro.db
 !site/dados_nuvem/bolao.db
+# fundos_cvm.db aqui é a versão REDUZIDA (~70MB, top500 + meses intercalados),
+# gerada por site/gerar_fundos_nuvem.py — não o banco completo de 214MB.
+!site/dados_nuvem/fundos_cvm.db
 
 # --- Dados brutos baixados / processados ---
 *.csv
