@@ -43,9 +43,7 @@ def carregar():
 
 
 base = carregar()
-atualizado = acoes.ranking_atualizado_em()
-if atualizado:
-    st.caption(f"Dados atualizados em **{atualizado}** · {len(base)} ações.")
+ui.selo_atualizacao(acoes.ranking_atualizado_em(), extra=f"{len(base)} ações")
 
 
 # ----------------- formatadores -----------------

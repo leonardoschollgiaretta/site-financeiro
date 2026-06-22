@@ -164,6 +164,36 @@ def cabecalho(titulo, subtitulo=None):
     st.write("")
 
 
+def selo_atualizacao(quando, extra=None):
+    """Mostra um selo discreto com a data da última atualização dos dados.
+
+    `quando` pode ser: str (ex.: '2026-06-22'), datetime, ou None.
+    `extra` é um texto opcional ao lado (ex.: '307 ações').
+    """
+    if quando is None:
+        st.caption("🕒 Sem informação de atualização dos dados.")
+        return
+    # formata datetime -> dd/mm/AAAA HH:MM ; str AAAA-MM-DD -> dd/mm/AAAA
+    try:
+        from datetime import datetime, date as _date
+        if isinstance(quando, (datetime,)):
+            txt = quando.strftime("%d/%m/%Y %H:%M")
+        elif isinstance(quando, _date):
+            txt = quando.strftime("%d/%m/%Y")
+        else:
+            s = str(quando)
+            try:
+                txt = datetime.strptime(s[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+            except ValueError:
+                txt = s
+    except Exception:
+        txt = str(quando)
+    msg = f"🕒 Dados atualizados em **{txt}**"
+    if extra:
+        msg += f" · {extra}"
+    st.caption(msg)
+
+
 def fmt_ptbr(valor, casas=0):
     """Número no formato pt-BR: milhar com ponto, decimal com vírgula."""
     if valor is None:

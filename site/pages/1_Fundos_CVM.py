@@ -15,10 +15,11 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from lib import acoes, fundos
+from lib import acoes, db, fundos, ui
 
 st.set_page_config(page_title="Fundos CVM", page_icon="🏦", layout="wide")
 st.title("🏦 Fundos CVM")
+ui.selo_atualizacao(db.info_atualizacao(db.FUNDOS_DB))
 
 # --- período disponível ---
 periodos = fundos.periodos_disponiveis()

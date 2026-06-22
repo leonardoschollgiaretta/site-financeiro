@@ -17,13 +17,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 
-from lib import copa, ui
+from lib import copa, db, ui
 
 st.set_page_config(page_title="Simular Copa 2026", page_icon="🏆", layout="wide")
 ui.aplicar_tema(False)
 ui.cabecalho("Simular Copa 2026",
              "Defina a ordem dos grupos e simule o mata-mata até o campeão · "
              "formato 48 seleções")
+ui.selo_atualizacao(db.info_atualizacao(copa._BOLAO_DB), extra="resultados dos grupos")
 
 GRUPOS = copa.grupos()
 if not GRUPOS:

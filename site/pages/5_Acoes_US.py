@@ -41,9 +41,8 @@ def carregar():
 
 
 base = carregar()
-atualizado = acoes.ranking_us_atualizado_em()
-if atualizado:
-    st.caption(f"Dados atualizados em **{atualizado}** · {len(base)} ações (S&P 500).")
+ui.selo_atualizacao(acoes.ranking_us_atualizado_em(),
+                    extra=f"{len(base)} ações (S&P 500)")
 
 
 def fmt_dolar(v):

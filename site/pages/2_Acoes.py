@@ -17,7 +17,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from lib import acoes, carteiras, ui
+from lib import acoes, carteiras, db, ui
 
 st.set_page_config(page_title="Ações — Fundamentos", page_icon="📈", layout="wide")
 
@@ -29,6 +29,7 @@ ui.aplicar_tema(ESCURO)
 
 ui.cabecalho("Ações — Fundamentos",
              "Indicadores, demonstrações trimestrais e composição de fundos · dados BR")
+ui.selo_atualizacao(db.info_atualizacao(db.FINANCEIRO_DB))
 
 lista = acoes.tickers()
 if not lista:
