@@ -1,0 +1,12 @@
+# Tema nativo do Streamlit alinhado ao design system (lib/ui.py).
+# Claro por padrão (cores do design); o usuário alterna p/ escuro pelo menu nativo,
+# e os tokens CSS de lib/ui.py acompanham via prefers-color-scheme.
+[theme]
+primaryColor = "#0f9d6e"
+backgroundColor = "#f5f7fa"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#1a2233"
+font = "sans serif"
+
+[server]
+headless = true

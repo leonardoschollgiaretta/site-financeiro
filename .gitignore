@@ -8,6 +8,10 @@
 *.db.bak_*
 *.sqlite
 *.sqlite3
+# EXCEÇÃO: cópias leves versionadas p/ o deploy na nuvem (Streamlit Cloud).
+!site/dados_nuvem/
+!site/dados_nuvem/financeiro.db
+!site/dados_nuvem/bolao.db
 
 # --- Dados brutos baixados / processados ---
 *.csv

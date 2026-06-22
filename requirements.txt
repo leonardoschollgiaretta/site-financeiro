@@ -1,0 +1,7 @@
+# Dependências do site Streamlit (deploy no Streamlit Community Cloud).
+streamlit>=1.40
+pandas>=2.0
+numpy>=1.26
+openpyxl>=3.1
+plotly>=5.18
+streamlit-aggrid>=1.0

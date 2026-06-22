@@ -10,9 +10,22 @@ import sqlite3
 
 SITE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(SITE_DIR, "data")
+# cópia leve VERSIONADA (vai pro GitHub) usada quando rodando na nuvem, onde
+# site/data/ não existe. Localmente, site/data/ tem prioridade (sempre atual).
+NUVEM_DIR = os.path.join(SITE_DIR, "dados_nuvem")
 
-FUNDOS_DB = os.path.join(DATA_DIR, "fundos_cvm.db")
-FINANCEIRO_DB = os.path.join(DATA_DIR, "financeiro.db")
+
+def _melhor_caminho(nome):
+    """Prefere o banco local (site/data/, atualizado diariamente); na nuvem,
+    cai para a cópia versionada (site/dados_nuvem/)."""
+    local = os.path.join(DATA_DIR, nome)
+    if os.path.exists(local):
+        return local
+    return os.path.join(NUVEM_DIR, nome)
+
+
+FUNDOS_DB = _melhor_caminho("fundos_cvm.db")
+FINANCEIRO_DB = _melhor_caminho("financeiro.db")
 
 
 def conectar_ro(caminho):
