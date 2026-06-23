@@ -654,6 +654,20 @@ def ranking_atualizado_em():
     return r[0] if r else None
 
 
+def data_precos():
+    """Data do fechamento mais recente em preco_atual (a 'data da cotação').
+
+    É a data REAL dos preços usados nos cálculos (P/L, market cap, etc.),
+    diferente da data em que o arquivo foi atualizado.
+    """
+    with conn_financeiro() as c:
+        try:
+            r = c.execute("SELECT MAX(data_fechamento) FROM preco_atual").fetchone()
+        except Exception:
+            return None
+    return r[0] if r and r[0] else None
+
+
 # ----- simulador de ranking ponderado (espelha a planilha do usuário) -----
 # Cada indicador: (rótulo na tabela, maior_é_melhor?, limite_inf, limite_sup,
 # peso%, zera_se_negativo?). Defaults idênticos à aba "Config" do Excel.

@@ -15,11 +15,10 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from lib import acoes, db, fundos, ui
+from lib import acoes, fundos, ui
 
 st.set_page_config(page_title="Fundos CVM", page_icon="🏦", layout="wide")
 st.title("🏦 Fundos CVM")
-ui.selo_atualizacao(db.info_atualizacao(db.FUNDOS_DB))
 
 # --- período disponível ---
 periodos = fundos.periodos_disponiveis()
@@ -28,6 +27,10 @@ if not periodos:
     st.stop()
 
 labels = {p: fundos.periodo_humano(p) for p in periodos}
+
+# selo: período mais recente das carteiras (a "data dos dados" dos fundos)
+st.caption(f"🕒 Carteiras até **{fundos.periodo_humano(periodos[-1])}** · "
+           f"{len(periodos)} meses disponíveis")
 
 
 def fmt_valor(v):

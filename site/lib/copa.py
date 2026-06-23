@@ -36,6 +36,21 @@ def grupos():
     return {g: sorted(t) for g, t in sorted(out.items())}
 
 
+def data_ultimo_resultado():
+    """Data (str AAAA-MM-DD) do jogo mais recente COM placar — a 'data dos
+    resultados' carregados. None se nenhum jogo tem resultado."""
+    if not os.path.exists(_BOLAO_DB):
+        return None
+    with sqlite3.connect(_BOLAO_DB) as c:
+        try:
+            r = c.execute(
+                "SELECT MAX(data) FROM jogos "
+                "WHERE fase='grupos' AND gols_casa IS NOT NULL").fetchone()
+        except Exception:
+            return None
+    return r[0] if r and r[0] else None
+
+
 def classificacao_grupos():
     """Calcula a tabela de cada grupo a partir dos placares gravados no bolao.db.
 
