@@ -874,3 +874,5 @@ with tab5:
             st.caption("ℹ️ Receita, lucro, margem e ROE = média ponderada pelos pesos. "
                        "P/L e P/VP = ponderados pelo inverso (forma correta de "
                        "agregar múltiplos numa carteira).")
+
+# touch p/ forcar reload
