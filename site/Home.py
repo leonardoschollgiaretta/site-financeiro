@@ -50,3 +50,5 @@ st.info(
     "Para atualizar, rode no terminal:  `python site/atualizar_dados.py`",
     icon="🔒",
 )
+
+# redeploy: forcar reload do cache do Streamlit Cloud
