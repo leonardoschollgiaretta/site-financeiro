@@ -29,7 +29,9 @@ ui.aplicar_tema(ESCURO)
 
 ui.cabecalho("Ações — Fundamentos",
              "Indicadores, demonstrações trimestrais e composição de fundos · dados BR")
-ui.selo_atualizacao(acoes.data_precos(), extra="cotações (fechamento)")
+# robusto: se o módulo em cache não tiver data_precos, não quebra a página
+_data_precos = getattr(acoes, "data_precos", lambda: None)
+ui.selo_atualizacao(_data_precos(), extra="cotações (fechamento)")
 
 lista = acoes.tickers()
 if not lista:
