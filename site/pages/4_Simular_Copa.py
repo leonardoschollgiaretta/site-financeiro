@@ -115,9 +115,12 @@ st.caption(f"Vagas de terceiro no bracket: {len(vagas_terceiro)}. "
            "Atribua um grupo a cada vaga (a vaga só aceita grupos elegíveis).")
 
 atribuicao_3 = {}   # slot -> grupo escolhido
+usados_3 = set()    # grupos já atribuídos a alguma vaga (não podem repetir)
 vcols = st.columns(4)
 for i, (cod, slot) in enumerate(vagas_terceiro):
-    elegiveis = [g for g in grupos_3 if g in slot[1:]]  # ex.: '3ABCDF' -> A,B,C,D,F
+    # elegíveis: do grupo certo, escolhidos, e ainda NÃO usados em outra vaga
+    elegiveis = [g for g in grupos_3
+                 if g in slot[1:] and g not in usados_3]  # ex.: '3ABCDF' -> A,B,C,D,F
     with vcols[i % 4]:
         if not elegiveis:
             st.selectbox(f"{slot} ({cod})", ["—"], key=f"v3_{cod}", disabled=True)
@@ -125,6 +128,7 @@ for i, (cod, slot) in enumerate(vagas_terceiro):
         else:
             g = st.selectbox(f"{slot} ({cod})", elegiveis, key=f"v3_{cod}")
             atribuicao_3[slot] = g
+            usados_3.add(g)   # bloqueia esse grupo nas próximas vagas
 
 
 # ---------------- resolver slots -> seleções ----------------
